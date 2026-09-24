@@ -1,0 +1,18 @@
+.DS_Store
+Thumbs.db
+node_modules/
+.venv/
+__pycache__/
+*.pyc
+.claude/settings.local.json
+
+# 개인 자격증명 — 절대 커밋하지 않는다
+# .env.local 은 이캠퍼스 달력 URL(일정 전체를 읽는 열쇠)과 웹앱 토큰을 담는다.
+내과제/.env.local
+내과제/계기판 열기.url
+
+# 생성물 — 언제든 다시 만든다
+내과제/대시보드.html
+내과제/sync.log
+deploy/public/
+deploy/.wrangler/

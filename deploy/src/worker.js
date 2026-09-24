@@ -2,7 +2,8 @@
  * 마감 계기판 — Cloudflare Worker (단일 사용자용)
  *
  * 하는 일
- *   1) 6시간마다 이캠퍼스 일정(.ics)을 직접 받아 D1 에 반영한다. 사람 손이 안 간다.
+ *   1) 1시간마다 이캠퍼스 일정(.ics)을 직접 받아 D1 에 반영한다. 사람 손이 안 간다.
+ *      화면의 '지금 동기화' 버튼으로 즉시 당겨올 수도 있다.
  *   2) 같은 화면(내과제/웹앱.html)을 서빙한다. 화면은 포크하지 않는다 —
  *      claude.use("db") 와 같은 모양의 어댑터를 주입해서 한 벌로 양쪽에서 쓴다.
  *
@@ -161,23 +162,42 @@ const log = (env, at, ok, found, added, message) =>
 const json = (o, status = 200) =>
   new Response(JSON.stringify(o), { status, headers: { "content-type": "application/json; charset=utf-8" } });
 
+/**
+ * 쿠키 또는 주소의 ?t= 로 통과시킨다.
+ *
+ * 쿠키만 받으면 브라우저 설정 하나에 통째로 막힌다 — 실제로 막혔다.
+ * 링크에 토큰이 붙어 있으면 쿠키가 안 붙는 환경에서도 열린다.
+ */
 function authed(req, env) {
   if (!env.APP_TOKEN) return false;
+  const q = new URL(req.url).searchParams.get("t");
+  if (q === env.APP_TOKEN) return true;
   const c = req.headers.get("cookie") || "";
   const m = new RegExp("(?:^|; )" + COOKIE + "=([^;]+)").exec(c);
-  return m && m[1] === env.APP_TOKEN;
+  return !!m && m[1] === env.APP_TOKEN;
+}
+
+/** 통과한 요청에는 쿠키를 다시 심어준다. 다음부터는 주소만으로 열리게. */
+function withCookie(res, env) {
+  const h = new Headers(res.headers);
+  h.append("set-cookie",
+    `${COOKIE}=${env.APP_TOKEN}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=31536000`);
+  return new Response(res.body, { status: res.status, headers: h });
 }
 
 /**
  * 페이지에 주입하는 어댑터. claude.use("db") 와 같은 모양을 흉내 내서,
  * 아티팩트용으로 쓴 웹앱.html 을 고치지 않고 그대로 쓴다.
  */
-const SHIM = `
+const SHIM = (token) => `
 <script>
 (function(){
-  var BASE="/api/items";
+  // 쿠키가 막힌 브라우저에서도 돌도록 토큰을 주소에 싣는다.
+  // 이 페이지는 이미 통과한 요청에만 나가므로 여기 토큰이 있어도 노출이 늘지 않는다.
+  var T=${JSON.stringify(token || "")};
+  function BASE(path){ return "/api/items"+(path||"")+(T?"?t="+encodeURIComponent(T):""); }
   function req(method,path,body){
-    return fetch(BASE+(path||""),{method:method,headers:{"content-type":"application/json"},
+    return fetch(BASE(path),{method:method,headers:{"content-type":"application/json"},
       body:body?JSON.stringify(body):undefined}).then(function(r){
         if(!r.ok) throw {code:r.status===401?"revoked":"unavailable",message:"요청 실패"};
         return r.status===204?null:r.json();
@@ -206,16 +226,24 @@ const SHIM = `
   }
   window.claude={use:function(n){ return Promise.resolve(n==="db"?{collection:collection,
     doc:function(){ throw new Error("미구현"); }}:null); }};
+
+  // 서버가 이캠퍼스에 직접 붙는다. 화면은 이 함수의 존재로 버튼을 켠다.
+  window.ddSync=function(){
+    return fetch("/api/sync"+(T?"?t="+encodeURIComponent(T):""),{method:"POST"})
+      .then(function(r){ return r.json(); });
+  };
 })();
 </script>`;
 
 // 아티팩트 런타임이 씌워 주던 껍데기를 여기서 똑같이 씌운다.
-const shell = (fragment) => `<!doctype html>
+const shell = (fragment, token) => `<!doctype html>
 <html lang="ko"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>:root{color-scheme:light dark}body{margin:0;font:14px system-ui}
 img{max-width:100%}[hidden]{display:none!important}</style>
-</head><body>${fragment}${SHIM}</body></html>`;
+</head><body>${SHIM(token)}${fragment}</body></html>`;
+// 어댑터가 화면보다 **먼저** 와야 한다. 화면은 로드 즉시 window.claude 를 확인하는데,
+// 뒤에 두면 그 시점에 아직 없어서 데이터가 영영 안 붙는다. 실제로 그렇게 비어 보였다.
 
 export default {
   async scheduled(_event, env, ctx) {
@@ -238,7 +266,12 @@ export default {
     }
 
     if (!authed(req, env)) {
-      return new Response("접근할 수 없습니다. /login?t=... 으로 여세요.", { status: 401 });
+      return new Response(
+        "열쇠가 없습니다.\n\n" +
+        "주소 끝에 ?t=<APP_TOKEN> 을 붙여서 여세요.\n" +
+        "APP_TOKEN 은 내과제/.env.local 에 있습니다.\n" +
+        "바탕이 되는 바로가기: 내과제/계기판 열기.url",
+        { status: 401, headers: { "content-type": "text/plain; charset=utf-8" } });
     }
 
     if (url.pathname === "/api/sync" && req.method === "POST") return json(await sync(env));
@@ -278,8 +311,8 @@ export default {
     // 화면
     const asset = await env.ASSETS.fetch(new Request(new URL("/app.html", url)));
     if (!asset.ok) return new Response("화면 파일(app.html)이 없습니다. build 를 먼저 돌리세요.", { status: 500 });
-    return new Response(shell(await asset.text()), {
+    return withCookie(new Response(shell(await asset.text(), env.APP_TOKEN), {
       headers: { "content-type": "text/html; charset=utf-8" },
-    });
+    }), env);
   },
 };

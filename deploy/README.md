@@ -10,7 +10,7 @@
 
 ## 화면은 한 벌만 관리한다
 
-`내과제/웹앱.html` 이 원본이다. Claude 아티팩트와 이 Worker가 **같은 파일**을 쓴다.
+`../내과제/웹앱.html` 이 원본이다. Claude 아티팩트와 이 Worker가 **같은 파일**을 쓴다.
 Worker가 `claude.use("db")` 와 같은 모양의 어댑터를 주입해서, 화면 코드는 자기가
 어디서 도는지 모른다. 화면을 두 벌로 갈라 관리하면 한쪽만 고치는 일이 반드시 생긴다.
 
@@ -41,7 +41,7 @@ wrangler login
 **1. 데이터베이스 만들기**
 
 ```bash
-cd netsvc-학습시스템/deploy
+cd deploy
 wrangler d1 create deadline
 ```
 
