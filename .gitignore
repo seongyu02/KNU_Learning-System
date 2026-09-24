@@ -15,4 +15,5 @@ __pycache__/
 내과제/대시보드.html
 내과제/sync.log
 deploy/public/
+.wrangler/
 deploy/.wrangler/

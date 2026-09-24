@@ -46,6 +46,10 @@ check("네트워크서비스 4-1 은 금요일(09-25)", c41 && c41.due, "2026-09
 const stack = vd.find((e) => e.title.includes("Stack"));
 check("게임프로그래밍 4주차는 화요일(09-22)", stack && stack.due, "2026-09-22");
 
+console.log("\n4-1. 강의는 열리는 날(due)과 닫히는 날(closes)을 따로 든다");
+check("4주차 Stack 은 10-06 에 닫힌다", stack && stack.closes, "2026-10-06");
+check("과제에는 closes 가 없다", hw.every((e) => e.closes === null), true);
+
 console.log("\n5. 과제 ID 가 파이썬 시드와 같은가");
 const jarvis = hw.find((e) => e.title.includes("자비스"));
 check("나만의_자비스_만들기 ID", jarvis && idFor(jarvis.course, jarvis.title, "2026-09-25"), "20260925_335ac104");

@@ -131,6 +131,9 @@ def classify(ev):
     params = ev.get("params:DTSTART", "")
     date_only = "VALUE=DATE" in params or len(raw.rstrip("Z")) == 8
     start = to_kst_date(raw, date_only)
+    # 강의차시의 DTSTART 는 열리는 때, DTEND 는 닫히는 때다. 마감이 아니다.
+    end_raw = ev.get("DTEND", "")
+    closes = to_kst_date(end_raw, False) if (end_raw and not date_only) else ""
 
     if HASH_RE.match(cat):
         return dict(kind="비교과", course="비교과·외부특강", code="", date=start, title=title)
@@ -143,7 +146,8 @@ def classify(ev):
             return dict(kind="제외", course=course, code=code, date=start, title=title)
 
     return dict(kind="과제" if date_only else "강의차시",
-                course=course, code=code, date=start, title=title)
+                course=course, code=code, date=start, title=title,
+                closes=closes if not date_only else "")
 
 
 # ── 날짜 계산 ──────────────────────────────────────────────────────────
@@ -181,15 +185,27 @@ def print_text(events, today):
         return sorted([e for e in events if e["kind"] == kind], key=lambda e: e["dday"])
 
     print("# 이캠퍼스 일정 — %s 기준, 총 %d건" % (today, len(events)))
-    for kind in ("과제", "강의차시"):
-        r = rows(kind)
-        print()
-        print("## %s (%d건)" % (kind, len(r)))
-        print()
-        print("| 마감 | D- | 과목 | 제목 |")
-        print("|---|---|---|---|")
-        for e in r:
-            print("| %s | %s | %s | %s |" % (e["date"] and e["d"], e["label"], e["course"], e["title"]))
+    r = rows("과제")
+    print()
+    print("## 과제 (%d건)" % len(r))
+    print()
+    print("| 마감 | D- | 과목 | 제목 |")
+    print("|---|---|---|---|")
+    for e in r:
+        print("| %s | %s | %s | %s |" % (e["date"] and e["d"], e["label"], e["course"], e["title"]))
+
+    # 강의는 열리는 날이 첫 칸이고, 다섯째 칸이 시청이 닫히는 날이다. 첫 칸은 마감이 아니다.
+    r = rows("강의차시")
+    print()
+    print("## 강의차시 (%d건)" % len(r))
+    print()
+    print("| 열림 | 열림까지 | 과목 | 제목 | 닫힘 |")
+    print("|---|---|---|---|---|")
+    for e in r:
+        c = as_date(e.get("closes", ""))
+        n = e["dday"]
+        opened = ("열린 지 %d일" % -n) if n < 0 else ("오늘 열림" if n == 0 else e["label"])
+        print("| %s | %s | %s | %s | %s |" % (e["date"] and e["d"], opened, e["course"], e["title"], c or "?"))
     others = [e for e in events if e["kind"] in ("비교과", "제외")]
     print()
     print("## 제외됨 %d건 (비교과·외부특강, 과제 없는 과목)" % len(others))

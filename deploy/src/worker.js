@@ -88,6 +88,10 @@ function parseIcs(raw) {
  *   · 제외 과목                      → 버린다
  *   · DTSTART 에 시각이 없다          → 과제 마감
  *   · DTSTART 에 시각이 있다          → 강의차시(동영상·열람기간)
+ *
+ * 강의차시의 DTSTART 는 **열리는 때**, DTEND 는 **닫히는 때**다. 마감이 아니다.
+ * due 에는 열리는 날을 그대로 둔다(ID 가 due 로 만들어지므로 바꾸면 같은 강의가 둘로 갈라진다).
+ * 닫히는 날은 closes 에 따로 싣는다. 이걸 버렸더니 막 열린 강의가 "지남 2일"로 떴다.
  */
 function classify(ev) {
   const cat = unescapeIcal(ev.CATEGORIES || "");
@@ -105,11 +109,19 @@ function classify(ev) {
   const d8 = toKstDate(rawStart, dateOnly);
   if (!/^\d{8}$/.test(d8)) return null;
 
+  const dash = (d) => `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}`;
+  let closes = null;
+  if (!dateOnly && ev.DTEND) {
+    const e8 = toKstDate(ev.DTEND, false);
+    if (/^\d{8}$/.test(e8)) closes = dash(e8);
+  }
+
   return {
     title,
     course,
     kind: dateOnly ? "과제" : "강의",
-    due: `${d8.slice(0, 4)}-${d8.slice(4, 6)}-${d8.slice(6, 8)}`,
+    due: dash(d8),
+    closes,
   };
 }
 
@@ -143,10 +155,15 @@ async function sync(env) {
     const id = idFor(e.course, e.title, e.due);
     // 이미 있으면 건드리지 않는다. 사람이 넣은 예상소요·완료표시를 덮으면 안 된다.
     const r = await env.DB.prepare(
-      `INSERT OR IGNORE INTO items (id,title,course,kind,due,dueTime,estimate,status,source,note,updatedAt)
-       VALUES (?,?,?,?,?,NULL,NULL,'미착수','자동','',?)`
-    ).bind(id, e.title, e.course, e.kind, e.due, at).run();
+      `INSERT OR IGNORE INTO items (id,title,course,kind,due,dueTime,closes,estimate,status,source,note,updatedAt)
+       VALUES (?,?,?,?,?,NULL,?,NULL,'미착수','자동','',?)`
+    ).bind(id, e.title, e.course, e.kind, e.due, e.closes, at).run();
     if (r.meta && r.meta.changes) added++;
+    // 닫히는 날은 이캠퍼스가 주인인 값이라 매번 따라간다. 사람이 고친 칸은 건드리지 않는다.
+    else if (e.closes) {
+      await env.DB.prepare(`UPDATE items SET closes=? WHERE id=? AND closes IS NOT ?`)
+        .bind(e.closes, id, e.closes).run();
+    }
   }
 
   await log(env, at, 1, events.length, added, "");
@@ -323,13 +340,14 @@ export default {
       if (req.method === "PUT") {
         const b = await req.json();
         await env.DB.prepare(
-          `INSERT INTO items (id,title,course,kind,due,dueTime,estimate,status,source,note,updatedAt)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?)
+          `INSERT INTO items (id,title,course,kind,due,dueTime,closes,estimate,status,source,note,updatedAt)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
            ON CONFLICT(id) DO UPDATE SET
              title=excluded.title, course=excluded.course, kind=excluded.kind, due=excluded.due,
-             dueTime=excluded.dueTime, estimate=excluded.estimate, status=excluded.status,
+             dueTime=excluded.dueTime, closes=COALESCE(excluded.closes, items.closes),
+             estimate=excluded.estimate, status=excluded.status,
              source=excluded.source, note=excluded.note, updatedAt=excluded.updatedAt`
-        ).bind(id, b.title, b.course, b.kind, b.due, b.dueTime ?? null,
+        ).bind(id, b.title, b.course, b.kind, b.due, b.dueTime ?? null, b.closes ?? null,
                b.estimate ?? null, b.status || "미착수", b.source || "수동",
                b.note || "", new Date().toISOString()).run();
         return new Response(null, { status: 204 });
