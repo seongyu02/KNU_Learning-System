@@ -351,7 +351,7 @@ details.more[open]>summary::before{content:"\2212\00a0"}
         <div class="calleg" aria-hidden="true"><span><i></i>제출물</span><span><i class="v"></i>강의</span></div>
       </section>
 
-      <section class="card">
+      <section class="card" id="cardSync">
         <h3>일정 가져오기</h3>
         <p>서버가 매일 아침 7시쯤 이캠퍼스에서 알아서 받아옵니다. 바로 보고 싶으면 <b>지금 동기화</b>를 누르세요.</p>
         <button class="act wide" id="btnNow" type="button" hidden>지금 동기화</button>
@@ -367,7 +367,7 @@ details.more[open]>summary::before{content:"\2212\00a0"}
         </details>
       </section>
 
-      <section class="card">
+      <section class="card" id="cardAdd">
         <h3>직접 추가</h3>
         <p><b>디지털트윈프로그래밍</b>과 <b>단기 K-프로젝트I</b> 은 이캠퍼스에 일정이 안 올라옵니다. 여기서 넣으세요.</p>
         <div class="frow">
@@ -476,7 +476,7 @@ details.more[open]>summary::before{content:"\2212\00a0"}
   function rowHTML(it,today,showDate){
     var n=dayDiff(it.due,today), done=it.status==="완료", hw=isHw(it);
     return '<li class="row'+(done?" done":"")+'" data-id="'+esc(it.id)+'">'
-      + '<input class="chk" type="checkbox" '+(done?"checked":"")+' aria-label="완료: '+esc(it.title)+'">'
+      + '<input class="chk" type="checkbox" '+(done?"checked":"")+(RO?" disabled":"")+' aria-label="완료: '+esc(it.title)+'">'
       + '<div><div class="rt">'+esc(it.title)+'</div>'
       +   '<div class="rs"><span class="kind '+(hw?"hw":"vd")+'">'+(hw?"제출":"강의")+'</span>'
       +   courseHTML(it.course)
@@ -872,6 +872,20 @@ details.more[open]>summary::before{content:"\2212\00a0"}
         say("saySync","서버에 닿지 못했습니다. 잠시 뒤 다시 시도하세요.",true);
       }).then(function(){ bn.disabled=false; bn.textContent=was; });
     });
+  }
+
+  // ── 읽기 전용 ──────────────────────────────────────
+  // 남에게 링크를 드릴 때 쓰는 모드. 서버가 쓰기를 막고, 화면은 손잡이를 감춘다.
+  var RO = (typeof window.ddReadOnly !== "undefined") && window.ddReadOnly;
+  if (RO) {
+    var addCard = $("cardAdd"); if (addCard) addCard.hidden = true;
+    var syncCard = $("cardSync");
+    if (syncCard) {
+      syncCard.innerHTML = '<h3>읽기 전용</h3><p>이 링크로는 <b>보기만</b> 됩니다. '
+        + '완료 체크 · 직접 추가 · 동기화는 막혀 있습니다.</p>';
+    }
+    var st = $("stamp");
+    if (st) st.textContent = st.textContent + " · 읽기 전용";
   }
 
   // ── 연결 ──────────────────────────────────────────

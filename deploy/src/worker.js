@@ -185,30 +185,47 @@ const json = (o, status = 200) =>
  * 쿠키만 받으면 브라우저 설정 하나에 통째로 막힌다 — 실제로 막혔다.
  * 링크에 토큰이 붙어 있으면 쿠키가 안 붙는 환경에서도 열린다.
  */
-function authed(req, env) {
-  if (!env.APP_TOKEN) return false;
+/**
+ * 토큰을 등급으로 가른다.
+ *
+ *   APP_TOKEN   나        — 보기 + 고치기
+ *   VIEW_TOKEN  채점·공유 — 보기만. 체크·추가·삭제·동기화가 전부 막힌다
+ *
+ * 링크를 남에게 드려도 데이터가 안 망가지게 하려는 것이다.
+ * 쿠키와 주소의 ?t= 둘 다 본다 — 쿠키만 받으면 브라우저 설정 하나에 막힌다.
+ */
+function levelOf(req, env) {
   const q = new URL(req.url).searchParams.get("t");
-  if (q === env.APP_TOKEN) return true;
   const c = req.headers.get("cookie") || "";
   const m = new RegExp("(?:^|; )" + COOKIE + "=([^;]+)").exec(c);
-  return !!m && m[1] === env.APP_TOKEN;
+  const given = [q, m && m[1]].filter(Boolean);
+  if (env.APP_TOKEN && given.includes(env.APP_TOKEN)) return "admin";
+  if (env.VIEW_TOKEN && given.includes(env.VIEW_TOKEN)) return "view";
+  return null;
 }
 
-/** 통과한 요청에는 쿠키를 다시 심어준다. 다음부터는 주소만으로 열리게. */
-function withCookie(res, env) {
+/** 통과한 요청에는 그 사람이 쓴 토큰을 쿠키로 심는다. 등급이 섞이면 안 된다. */
+function withCookie(res, req, env, level) {
+  const token = level === "admin" ? env.APP_TOKEN : env.VIEW_TOKEN;
+  if (!token) return res;
   const h = new Headers(res.headers);
   h.append("set-cookie",
-    `${COOKIE}=${env.APP_TOKEN}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=31536000`);
+    `${COOKIE}=${token}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=31536000`);
   return new Response(res.body, { status: res.status, headers: h });
 }
+
+const readOnly = (msg) =>
+  json({ ok: false, message: msg || "읽기 전용 링크입니다. 고칠 수 없습니다." }, 403);
 
 /**
  * 페이지에 주입하는 어댑터. claude.use("db") 와 같은 모양을 흉내 내서,
  * 아티팩트용으로 쓴 웹앱.html 을 고치지 않고 그대로 쓴다.
  */
-const SHIM = (token) => `
+const SHIM = (token, level) => `
 <script>
 (function(){
+  // 읽기 전용이면 화면이 편집 손잡이를 스스로 감춘다.
+  window.ddReadOnly = ${level !== "admin" ? "true" : "false"};
   // 쿠키가 막힌 브라우저에서도 돌도록 토큰을 주소에 싣는다.
   // 이 페이지는 이미 통과한 요청에만 나가므로 여기 토큰이 있어도 노출이 늘지 않는다.
   var T=${JSON.stringify(token || "")};
@@ -246,7 +263,8 @@ const SHIM = (token) => `
     doc:function(){ throw new Error("미구현"); }}:null); }};
 
   // 서버가 이캠퍼스에 직접 붙는다. 화면은 이 함수의 존재로 버튼을 켠다.
-  window.ddSync=function(){
+  // 읽기 전용에서는 아예 만들지 않는다 — 눌러도 403 이 날 버튼을 보여줄 이유가 없다.
+  if(!window.ddReadOnly) window.ddSync=function(){
     return fetch("/api/sync"+(T?"?t="+encodeURIComponent(T):""),{method:"POST"})
       .then(function(r){ return r.json(); });
   };
@@ -254,12 +272,12 @@ const SHIM = (token) => `
 </script>`;
 
 // 아티팩트 런타임이 씌워 주던 껍데기를 여기서 똑같이 씌운다.
-const shell = (fragment, token) => `<!doctype html>
+const shell = (fragment, token, level) => `<!doctype html>
 <html lang="ko"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>:root{color-scheme:light dark}body{margin:0;font:14px system-ui}
 img{max-width:100%}[hidden]{display:none!important}</style>
-</head><body>${SHIM(token)}${fragment}</body></html>`;
+</head><body>${SHIM(token, level)}${fragment}</body></html>`;
 // 어댑터가 화면보다 **먼저** 와야 한다. 화면은 로드 즉시 window.claude 를 확인하는데,
 // 뒤에 두면 그 시점에 아직 없어서 데이터가 영영 안 붙는다. 실제로 그렇게 비어 보였다.
 
@@ -271,19 +289,22 @@ export default {
   async fetch(req, env) {
     const url = new URL(req.url);
 
-    // 문 열기: /login?t=<APP_TOKEN> 을 한 번 열면 쿠키가 박힌다.
+    const level = levelOf(req, env);
+
+    // 문 열기: /login?t=<토큰> 을 한 번 열면 그 등급의 쿠키가 박힌다.
     if (url.pathname === "/login") {
-      if (url.searchParams.get("t") !== env.APP_TOKEN) return new Response("접근할 수 없습니다", { status: 401 });
+      if (!level) return new Response("접근할 수 없습니다", { status: 401 });
+      const token = level === "admin" ? env.APP_TOKEN : env.VIEW_TOKEN;
       return new Response(null, {
         status: 302,
         headers: {
           location: "/",
-          "set-cookie": `${COOKIE}=${env.APP_TOKEN}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=31536000`,
+          "set-cookie": `${COOKIE}=${token}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=31536000`,
         },
       });
     }
 
-    if (!authed(req, env)) {
+    if (!level) {
       return new Response(
         "열쇠가 없습니다.\n\n" +
         "주소 끝에 ?t=<APP_TOKEN> 을 붙여서 여세요.\n" +
@@ -291,6 +312,11 @@ export default {
         "바탕이 되는 바로가기: 내과제/계기판 열기.url",
         { status: 401, headers: { "content-type": "text/plain; charset=utf-8" } });
     }
+
+    // 쓰기는 admin 만. 읽기 전용은 여기서 걸린다.
+    const writing = req.method === "PUT" || req.method === "DELETE"
+      || (url.pathname === "/api/sync" && req.method === "POST");
+    if (writing && level !== "admin") return readOnly();
 
     if (url.pathname === "/api/sync" && req.method === "POST") return json(await sync(env));
 
@@ -357,8 +383,9 @@ export default {
     // 화면
     const asset = await env.ASSETS.fetch(new Request(new URL("/app.html", url)));
     if (!asset.ok) return new Response("화면 파일(app.html)이 없습니다. build 를 먼저 돌리세요.", { status: 500 });
-    return withCookie(new Response(shell(await asset.text(), env.APP_TOKEN), {
+    const pageToken = level === "admin" ? env.APP_TOKEN : env.VIEW_TOKEN;
+    return withCookie(new Response(shell(await asset.text(), pageToken, level), {
       headers: { "content-type": "text/html; charset=utf-8" },
-    }), env);
+    }), req, env, level);
   },
 };

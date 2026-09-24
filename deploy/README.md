@@ -55,8 +55,19 @@ wrangler d1 execute deadline --remote --file=schema.sql
 
 ```bash
 wrangler secret put ICS_URL      # 내과제/.env.local 에 있는 그 URL
-wrangler secret put APP_TOKEN    # 아무 긴 문자열. 아래에서 문 여는 열쇠가 된다
+wrangler secret put APP_TOKEN    # 나 — 보기 + 고치기
+wrangler secret put VIEW_TOKEN   # 남에게 줄 링크 — 보기만
 ```
+
+**토큰이 두 개인 이유.** `APP_TOKEN` 링크를 남에게 주면 완료 체크·삭제·추가가 다 된다.
+채점하는 사람이 실수로 눌러도 내 데이터가 바뀐다. `VIEW_TOKEN` 으로 열면
+화면이 편집 손잡이를 스스로 감추고, 서버도 쓰기 요청을 **403** 으로 막는다.
+
+| | `APP_TOKEN` | `VIEW_TOKEN` |
+|---|---|---|
+| 화면 보기 · 목록 읽기 | 200 | 200 |
+| 완료 체크 · 추가 · 삭제 | 200 | **403** |
+| 지금 동기화 | 200 | **403** |
 
 > 두 값 모두 저장소에 커밋되지 않는다. Cloudflare 가 암호화해 보관한다.
 > `ICS_URL` 은 내 일정 전체를 읽는 열쇠다. 남에게 주지 않는다.
