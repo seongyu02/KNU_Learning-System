@@ -5,3 +5,14 @@ node_modules/
 __pycache__/
 *.pyc
 .claude/settings.local.json
+
+# 개인 자격증명 — 절대 커밋하지 않는다
+내과제/.env.local
+
+# 생성물 — 언제든 sync.bat 으로 다시 만든다
+내과제/대시보드.html
+내과제/sync.log
+
+# 배포 생성물
+deploy/public/
+deploy/.wrangler/

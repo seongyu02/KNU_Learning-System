@@ -1,0 +1,21 @@
+name = "deadline-dashboard"
+main = "src/worker.js"
+compatibility_date = "2026-09-01"
+
+# 6시간마다 이캠퍼스 일정을 받아 D1 에 반영한다.
+# 분(minute)을 0 으로 두지 않는 건, 모두가 정각에 몰리면 서비스가 느려지기 때문이다.
+[triggers]
+crons = ["17 */6 * * *"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "deadline"
+database_id = "PUT_YOUR_D1_DATABASE_ID_HERE"
+
+[assets]
+directory = "public"
+binding = "ASSETS"
+
+# 비밀값은 여기에 쓰지 않는다. wrangler secret put 으로 넣는다.
+#   wrangler secret put ICS_URL      이캠퍼스 달력 URL
+#   wrangler secret put APP_TOKEN    이 페이지를 열 때 쓸 임의의 긴 문자열
