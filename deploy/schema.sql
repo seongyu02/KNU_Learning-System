@@ -25,3 +25,11 @@ CREATE TABLE IF NOT EXISTS sync_log (
   added   INTEGER NOT NULL DEFAULT 0,
   message TEXT NOT NULL DEFAULT ''
 );
+
+-- 하루치 계획. 화면이 만든 JSON 을 통째로 보관한다.
+-- 모양이 바뀔 수 있어서 칸을 미리 못 박지 않는다.
+CREATE TABLE IF NOT EXISTS logs (
+  id        TEXT PRIMARY KEY,   -- YYYY-MM-DD
+  body      TEXT NOT NULL,      -- JSON
+  updatedAt TEXT NOT NULL
+);

@@ -195,25 +195,26 @@ const SHIM = (token) => `
   // 쿠키가 막힌 브라우저에서도 돌도록 토큰을 주소에 싣는다.
   // 이 페이지는 이미 통과한 요청에만 나가므로 여기 토큰이 있어도 노출이 늘지 않는다.
   var T=${JSON.stringify(token || "")};
-  function BASE(path){ return "/api/items"+(path||"")+(T?"?t="+encodeURIComponent(T):""); }
-  function req(method,path,body){
-    return fetch(BASE(path),{method:method,headers:{"content-type":"application/json"},
+  function BASE(col,path){ return "/api/"+col+(path||"")+(T?"?t="+encodeURIComponent(T):""); }
+  function req(col,method,path,body){
+    return fetch(BASE(col,path),{method:method,headers:{"content-type":"application/json"},
       body:body?JSON.stringify(body):undefined}).then(function(r){
         if(!r.ok) throw {code:r.status===401?"revoked":"unavailable",message:"요청 실패"};
         return r.status===204?null:r.json();
       });
   }
-  function collection(){
+  function collection(name){
+    var col = (name==="logs") ? "logs" : "items";
     return {
       doc:function(id){ return {
-        set:function(d){ return req("PUT","/"+encodeURIComponent(id),d); },
-        delete:function(){ return req("DELETE","/"+encodeURIComponent(id)); }
+        set:function(d){ return req(col,"PUT","/"+encodeURIComponent(id),d); },
+        delete:function(){ return req(col,"DELETE","/"+encodeURIComponent(id)); }
       };},
       onSnapshot:function(next,onErr){
         var dead=false;
         function pull(){
           if(dead) return;
-          req("GET").then(function(rows){
+          req(col,"GET").then(function(rows){
             next({docs:rows.map(function(r){return {id:r.id,exists:true,data:function(){return r;}};}),
                   size:rows.length,empty:!rows.length,metadata:{fromCache:false,hasPendingWrites:false}});
           }).catch(function(e){ if(onErr) onErr(e); });
@@ -284,6 +285,33 @@ export default {
     if (url.pathname === "/api/items" && req.method === "GET") {
       const r = await env.DB.prepare(`SELECT * FROM items ORDER BY due`).all();
       return json(r.results || []);
+    }
+
+    // 하루치 계획. 본문은 JSON 문자열로 통째 보관한다 —
+    // 모양이 화면 쪽 사정에 따라 바뀌므로 칸을 미리 못 박지 않는다.
+    if (url.pathname === "/api/logs" && req.method === "GET") {
+      const r = await env.DB.prepare(`SELECT * FROM logs ORDER BY id DESC LIMIT 60`).all();
+      return json((r.results || []).map((row) => {
+        let b = {};
+        try { b = JSON.parse(row.body); } catch { /* 깨진 줄은 빈 것으로 본다 */ }
+        return { ...b, id: row.id, date: b.date || row.id };
+      }));
+    }
+
+    if (url.pathname.startsWith("/api/logs/")) {
+      const id = decodeURIComponent(url.pathname.slice("/api/logs/".length));
+      if (req.method === "DELETE") {
+        await env.DB.prepare(`DELETE FROM logs WHERE id=?`).bind(id).run();
+        return new Response(null, { status: 204 });
+      }
+      if (req.method === "PUT") {
+        const b = await req.json();
+        await env.DB.prepare(
+          `INSERT INTO logs (id, body, updatedAt) VALUES (?,?,?)
+           ON CONFLICT(id) DO UPDATE SET body=excluded.body, updatedAt=excluded.updatedAt`
+        ).bind(id, JSON.stringify(b), new Date().toISOString()).run();
+        return new Response(null, { status: 204 });
+      }
     }
 
     if (url.pathname.startsWith("/api/items/")) {
