@@ -14,7 +14,22 @@
 Worker가 `claude.use("db")` 와 같은 모양의 어댑터를 주입해서, 화면 코드는 자기가
 어디서 도는지 모른다. 화면을 두 벌로 갈라 관리하면 한쪽만 고치는 일이 반드시 생긴다.
 
-## 배포 순서
+## 배포된 주소
+
+```
+https://deadline-dashboard.a92875664.workers.dev
+```
+
+`APP_TOKEN` 은 `내과제/.env.local` 에 있다 (커밋되지 않는다).
+처음 한 번 `…/login?t=<APP_TOKEN>` 을 열면 쿠키가 박혀서, 그다음부터는 주소만 치면 된다.
+
+| 항목 | 값 |
+|---|---|
+| D1 데이터베이스 | `deadline` (APAC) |
+| 크론 | `17 */6 * * *` — 6시간마다 |
+| 첫 동기화 | 2026-09-24 · 15건 수집 (과제 4 / 강의 11) |
+
+## 배포 순서 (처음부터 다시 할 때)
 
 사전 준비: Cloudflare 계정(무료), Node.js.
 
@@ -56,7 +71,7 @@ wrangler deploy
 **4. 첫 동기화**
 
 ```
-https://deadline-dashboard.<계정>.workers.dev/login?t=<APP_TOKEN>
+https://deadline-dashboard.a92875664.workers.dev/login?t=<APP_TOKEN>
 ```
 
 한 번 열면 쿠키가 박혀서 그다음부터는 주소만 치면 된다. 폰 홈화면에 추가해도 된다.
@@ -64,7 +79,7 @@ https://deadline-dashboard.<계정>.workers.dev/login?t=<APP_TOKEN>
 
 ```bash
 curl -X POST -H "cookie: dd_token=<APP_TOKEN>" \
-  https://deadline-dashboard.<계정>.workers.dev/api/sync
+  https://deadline-dashboard.a92875664.workers.dev/api/sync
 ```
 
 ## 잠금
@@ -85,7 +100,7 @@ Workers 는 하루 10만 요청, D1 은 하루 500만 행 읽기까지 무료다
 
 ```bash
 curl -H "cookie: dd_token=<APP_TOKEN>" \
-  https://deadline-dashboard.<계정>.workers.dev/api/status
+  https://deadline-dashboard.a92875664.workers.dev/api/status
 ```
 
 `ok: 0` 에 `HTTP 403` 같은 메시지가 보이면 이캠퍼스에서 달력 URL을 다시 받아

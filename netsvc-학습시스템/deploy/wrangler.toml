@@ -10,7 +10,7 @@ crons = ["17 */6 * * *"]
 [[d1_databases]]
 binding = "DB"
 database_name = "deadline"
-database_id = "PUT_YOUR_D1_DATABASE_ID_HERE"
+database_id = "89c1a9df-c620-43f9-94d0-b45e0d8fb899"
 
 [assets]
 directory = "public"
