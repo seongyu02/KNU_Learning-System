@@ -162,13 +162,12 @@ ol.strip .today .dots i.v{background:transparent;box-shadow:inset 0 0 0 1.5px va
 .bar button{border:0;background:none;cursor:pointer;color:var(--cobalt-ink);font-size:13.5px;font-weight:600;padding:0}
 
 /* 하루 묶음 */
-.day{display:grid;grid-template-columns:116px minmax(0,1fr);background:var(--surface);border-radius:18px;
+.day{display:grid;grid-template-columns:142px minmax(0,1fr);background:var(--surface);border-radius:18px;
   margin-bottom:10px;border:1px solid var(--line);scroll-margin-top:20px;transition:border-color .3s,box-shadow .3s}
 .day.flash{border-color:var(--cobalt);box-shadow:0 0 0 3px var(--cobalt-soft)}
 .dside{padding:18px 0 16px 22px;display:flex;flex-direction:column;align-items:flex-start;gap:2px}
-.dnum{font-size:40px;font-weight:700;line-height:.95;letter-spacing:-.05em}
+.dnum{font-size:34px;font-weight:700;line-height:1;letter-spacing:-.045em;white-space:nowrap}
 .dwk{font-size:13px;color:var(--ink-2);font-weight:500;margin-top:5px}
-.dlate.avail{color:var(--cobalt-ink)}
 .dlate{font-size:17px;font-weight:800;letter-spacing:-.03em;color:var(--red-ink);line-height:1.2}
 .pill{margin-top:9px;font-size:12.5px;font-weight:700;padding:2px 9px;border-radius:999px;
   background:var(--sunken);color:var(--ink-2);white-space:nowrap}
@@ -178,7 +177,7 @@ ol.strip .today .dots i.v{background:transparent;box-shadow:inset 0 0 0 1.5px va
 @media(max-width:560px){
   .day{grid-template-columns:1fr}
   .dside{flex-direction:row;align-items:baseline;gap:10px;padding:16px 18px 2px}
-  .dnum{font-size:28px}.dwk{margin:0}.pill{margin:0 0 0 auto}
+  .dnum{font-size:26px}.dwk{margin:0}.pill{margin:0 0 0 auto}
 }
 ul.rows{list-style:none;margin:0;padding:6px 0}
 li.row{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:14px;align-items:center;
@@ -428,7 +427,10 @@ details.more[open]>summary::before{content:"\2212\00a0"}
   function dayDiff(due,today){ return Math.round((utc(due)-utc(today))/86400000); }
   function addDays(d,n){ return iso(utc(d)+n*86400000); }
   function wday(d){ return new Date(utc(d)).getUTCDay(); }
-  function shortDate(d){ return (+d.slice(5,7))+"/"+(+d.slice(8,10))+" ("+WD[wday(d)]+")"; }
+  function shortDate(d){ return (+d.slice(5,7))+"월 "+(+d.slice(8,10))+"일"; }
+  function longDate(d){ return shortDate(d)+" "+WD[wday(d)]+"요일"; }
+  // 하루 묶음 왼쪽의 큰 숫자. 며칠인지만 크게 찍으면 몇 월인지 알 수 없다.
+  function dotDate(d){ return (+d.slice(5,7))+"."+(+d.slice(8,10)); }
   function ddLabel(n){
     if(n<0) return "지남 "+(-n)+"일";
     return n===0?"오늘":(n===1?"내일":"D-"+n);
@@ -448,17 +450,16 @@ details.more[open]>summary::before{content:"\2212\00a0"}
     if(i.closes&&dayDiff(i.closes,today)<0) return "gone";
     return "open";
   }
-  // 타임라인에서 어느 묶음에 들어가나
+  // 타임라인에서 어느 묶음에 들어가나.
+  // 강의의 마감은 **닫히는 날**이다. 열리는 날은 마감이 아니라 시작일이라
+  // 날짜 칸은 closes 로 잡는다 — 그래야 "언제까지"가 목록에 드러난다.
+  function endOf(i){ return isHw(i)?i.due:(i.closes||i.due); }
   function slotOf(i,today){
-    if(isHw(i)) return dayDiff(i.due,today)<0?"late":i.due;
-    var st=lectState(i,today);
-    return st==="soon"?i.due:(st==="gone"?"late":"avail");
+    var e=endOf(i);
+    return dayDiff(e,today)<0?"late":e;
   }
-  // 달력·띠에 점을 찍을 날짜. 볼 수 있는 강의는 닫히는 날에 찍는다
-  function markOf(i,today){
-    if(isHw(i)) return i.due;
-    return lectState(i,today)==="soon"?i.due:(i.closes||i.due);
-  }
+  // 달력·띠에 점을 찍을 날짜도 같은 기준
+  function markOf(i,today){ return endOf(i); }
 
   function fmtLeft(ms){
     var past=ms<0; ms=Math.abs(ms);
@@ -491,14 +492,16 @@ details.more[open]>summary::before{content:"\2212\00a0"}
 
   function lectSpan(it,today){
     var st=lectState(it,today);
-    if(st==="soon") return it.closes?'<span class="num">'+shortDate(it.closes)+'까지</span>':'';
-    if(st==="gone") return '<span class="num">'+shortDate(it.closes)+' 닫힘</span>';
-    return '<span class="num">'+shortDate(it.due)+' 열림'+(it.closes?', '+shortDate(it.closes)+'까지':'')+'</span>';
+    if(!it.closes) return '';
+    // 마감(닫히는 날)을 먼저 말한다. 열리는 날은 아직 안 열렸을 때만 덧붙인다.
+    return '<span class="num">'+shortDate(it.closes)+'까지</span>'
+      + (st==="soon"?'<span class="num">'+shortDate(it.due)+' 열림</span>':'');
   }
   function lectLeft(it,today){
-    if(lectState(it,today)!=="open"||!it.closes) return '';
+    if(!it.closes) return '';
     var n=dayDiff(it.closes,today);
-    return '<span class="left num'+(n<=2?" hot":"")+'">'+(n===0?"오늘 닫힘":"D-"+n)+'</span>';
+    if(n<0) return '<span class="left num hot">지남 '+(-n)+'일</span>';
+    return '<span class="left num'+(n<=2?" hot":"")+'">'+(n===0?"오늘까지":"D-"+n)+'</span>';
   }
 
   // 같은 과목 · 같은 날 열리는 강의 차시가 셋 이상이면 한 줄로 접는다.
@@ -532,17 +535,15 @@ details.more[open]>summary::before{content:"\2212\00a0"}
 
   // ── 하루 묶음 ─────────────────────────────────────
   function dayHTML(key,list,today){
-    var late=key==="late", avail=key==="avail";
-    var hws=list.filter(isHw), n=(late||avail)?-1:dayDiff(key,today);
-    var tone=late||(hws.length&&n<=1)?"hot":(hws.length&&n<=7?"warn":(hws.length?"":"study"));
-    var label=hws.length?ddLabel(n):(n===0?"오늘 열림":(n===1?"내일 열림":"D-"+n+" 열림"));
+    var late=key==="late";
+    var hws=list.filter(isHw), n=late?-1:dayDiff(key,today);
+    // 제출물이 섞여 있으면 급한 색, 강의만 있으면 파란 색
+    var tone=late?"hot":(hws.length?(n<=1?"hot":(n<=7?"warn":"")):"study");
     var side=late
       ? '<div class="dlate">밀린 것</div><div class="dwk">'+list.length+'건</div><span class="pill hot">지남</span>'
-      : avail
-      ? '<div class="dlate avail">볼 수 있음</div><div class="dwk">강의 '+list.length+'개</div><span class="pill study">시청 가능</span>'
-      : '<div class="dnum num">'+(+key.slice(8,10))+'</div>'
-        + '<div class="dwk">'+(+key.slice(5,7))+'월 '+WD[wday(key)]+'요일</div>'
-        + '<span class="pill num '+tone+'">'+label+'</span>';
+      : '<div class="dnum num">'+dotDate(key)+'</div>'
+        + '<div class="dwk">'+WD[wday(key)]+'요일</div>'
+        + '<span class="pill num '+tone+'">'+ddLabel(n)+'</span>';
     return '<section class="day" id="d-'+key+'"><div class="dside">'+side+'</div>'
       + '<ul class="rows">'+rowsHTML(list,today,late)+'</ul></section>';
   }
@@ -554,9 +555,11 @@ details.more[open]>summary::before{content:"\2212\00a0"}
       if(!g[k]){ g[k]=[]; keys.push(k); }
       g[k].push(i);
     });
-    var rank=function(k){ return k==="late"?0:(k==="avail"?1:2); };
-    keys.sort(function(a,b){ return rank(a)-rank(b)||(a<b?-1:(a>b?1:0)); });
-    var end=function(i){ return isHw(i)?i.due:(i.closes||"9999"); };
+    keys.sort(function(a,b){
+      if(a==="late") return -1; if(b==="late") return 1;
+      return a<b?-1:(a>b?1:0);
+    });
+    var end=endOf;
     keys.forEach(function(k){ g[k].sort(function(a,b){
       if(isHw(a)!==isHw(b)) return isHw(a)?-1:1;
       return end(a)<end(b)?-1:(end(a)>end(b)?1:(a.due<b.due?-1:(a.due>b.due?1:0)));
@@ -703,8 +706,8 @@ details.more[open]>summary::before{content:"\2212\00a0"}
     $("nowEyebrow").textContent=n<0?what+"이 지났습니다":(n===0?"오늘 "+what:(n===1?"내일 "+what:"다음 "+what));
     $("nowWhat").textContent=next.title;
     $("nowMeta").innerHTML='<span>'+esc(next.course)+'</span>'
-      +'<span class="num">'+shortDate(next.date)+' '+esc(next.time)+'까지</span>'
-      +(!next.hw&&dayDiff(next.opens,today)>0?'<span class="num">'+shortDate(next.opens)+' 열림</span>':'');
+      +'<span class="num">'+longDate(next.date)+' '+esc(next.time)+'까지</span>'
+      +(!next.hw&&dayDiff(next.opens,today)>0?'<span class="num">'+longDate(next.opens)+' 열림</span>':'');
     $("nowClock").setAttribute("data-due",next.ms);
     $("nowLabel").textContent=n<0?"마감 이후 흐른 시간":"남은 시간";
     var after=sorted.slice(1,4);
