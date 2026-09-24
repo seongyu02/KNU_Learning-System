@@ -1,6 +1,11 @@
 #!/usr/bin/env python3
 """이캠퍼스 일정(iCal)을 받아 과제 / 강의차시 / 비교과로 갈라낸다.
 
+토큰 없이 재현하려면 예시 파일로 돌린다 — 채점하는 사람이 내 달력 URL 을
+받지 않아도 되게 하려는 것이다.
+
+    python 내과제/일정가져오기.py --file 내과제/예시일정.ics --asof 2026-09-24
+
 사용:
     python 내과제/일정가져오기.py            텍스트로 출력
     python 내과제/일정가져오기.py --html      대시보드 HTML 생성 후 경로 출력
@@ -9,6 +14,7 @@
 보안:   ICS_URL 은 인증 토큰이다. 이 스크립트는 URL 을 출력하지 않는다.
         생성되는 HTML 에도 URL 은 들어가지 않는다.
 """
+import io
 import os
 import re
 import sys
@@ -34,6 +40,15 @@ BS = chr(92)  # 역슬래시. iCal 이스케이프를 풀 때만 쓴다
 
 
 # ── 수집 ──────────────────────────────────────────────────────────────
+
+def arg(name, default=None):
+    """--name 값 형태의 인자를 읽는다."""
+    if name in sys.argv:
+        i = sys.argv.index(name)
+        if i + 1 < len(sys.argv):
+            return sys.argv[i + 1]
+    return default
+
 
 def read_url():
     if not os.path.exists(ENV):
@@ -169,8 +184,26 @@ def dday_label(d, today):
 
 
 def collect():
-    events = [classify(e) for e in parse(fetch(read_url()))]
-    today = datetime.datetime.now(KST).date()
+    # --file 이 있으면 그 파일로 돈다. 네트워크도 토큰도 필요 없다.
+    path = arg("--file")
+    if path:
+        if not os.path.exists(path):
+            sys.exit("[중단] 파일이 없습니다: %s" % path)
+        raw = io.open(path, encoding="utf-8").read()
+    else:
+        raw = fetch(read_url())
+
+    events = [classify(e) for e in parse(raw)]
+
+    # --asof 로 '오늘'을 고정하면 예시 파일이 언제 돌려도 같은 결과를 낸다.
+    asof = arg("--asof")
+    if asof:
+        try:
+            today = datetime.datetime.strptime(asof, "%Y-%m-%d").date()
+        except ValueError:
+            sys.exit("[중단] --asof 는 2026-09-24 형식입니다.")
+    else:
+        today = datetime.datetime.now(KST).date()
     for e in events:
         e["d"] = as_date(e["date"])
         e["dday"] = (e["d"] - today).days if e["d"] else 9999

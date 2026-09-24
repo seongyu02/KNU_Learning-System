@@ -56,16 +56,25 @@ KNU_Learning-System/
 
 ## 써 보기
 
-```bash
-# 1. 달력 URL 등록 (최초 1회)
-#    이캠퍼스 → /calendar/export.php → "모든 이벤트" + "현재와 추후 2달"
-#    → 일정 URL 불러오기 → 내과제/.env.local 의 ICS_URL 에 붙여넣기
-cp 내과제/.env.local.example 내과제/.env.local
+**설정 없이 바로** — 내 계정 없이도 그대로 돌아갑니다.
 
-# 2. 수집해 보기
+```bash
+python 내과제/일정가져오기.py --file 내과제/예시일정.ics --asof 2026-09-24
+node deploy/test.mjs 내과제/예시일정.ics          # 분류 규칙 검증 14/14
+```
+
+`예시일정.ics` 는 실제 피드에서 식별 정보를 지운 파일입니다.
+`--asof` 가 '오늘'을 고정해서 언제 돌려도 같은 결과가 나옵니다.
+
+**내 계정으로 쓸 때**
+
+```bash
+# 이캠퍼스 → /calendar/export.php → "모든 이벤트" + "현재와 추후 2달"
+# → 일정 URL 불러오기 → 내과제/.env.local 의 ICS_URL 에 붙여넣기
+cp 내과제/.env.local.example 내과제/.env.local
 python 내과제/일정가져오기.py
 
-# 3. Claude Code 에서
+# Claude Code 에서
 /오늘 3시간
 ```
 
