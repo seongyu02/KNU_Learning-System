@@ -2,15 +2,14 @@ name = "deadline-dashboard"
 main = "src/worker.js"
 compatibility_date = "2026-09-01"
 
-# 평소 갱신은 화면의 '지금 동기화' 버튼으로 한다. 크론은 하루 1회만 남긴다.
+# 평소 갱신은 화면이 한다 — 열었을 때 6시간 넘게 묵었으면 뒤에서 당겨오고,
+# '지금 동기화' 버튼으로 즉시 당겨올 수도 있다.
 #
-# 왜 아예 끄지 않나: 달력 URL 이 만료되면 조용히 깨진다. 버튼을 안 누르는 날에는
-# 그 사실조차 모른다. 하루 1회가 그 감지기다 (sync_log 에 ok=0 으로 남는다).
-# 그리고 아침에 열었을 때 이미 최신인 편이 낫다.
-#
-# 시각은 UTC 다. 22:13 UTC = 07:13 KST.
+# 크론은 한동안 안 들어온 학생을 챙긴다. 한 번에 5명씩, 가장 오래 안 돈 순서로 돈다
+# (worker.js 의 CRON_USERS). 한꺼번에 전원을 돌면 무료 플랜의 호출당 한도를 넘는다.
+# 매시 13분 = 하루 120명. 학생이 그보다 늘면 주기를 줄이거나 유료 플랜으로 간다.
 [triggers]
-crons = ["13 22 * * *"]
+crons = ["13 * * * *"]
 
 [[d1_databases]]
 binding = "DB"
@@ -20,7 +19,12 @@ database_id = "89c1a9df-c620-43f9-94d0-b45e0d8fb899"
 [assets]
 directory = "public"
 binding = "ASSETS"
+# 화면 파일도 Worker 를 거쳐서만 나간다. 이게 없으면 /app.html 을 바로 열 수 있고,
+# 그 응답에는 로그인 확인도 보안 헤더도 붙지 않는다.
+run_worker_first = true
 
 # 비밀값은 여기에 쓰지 않는다. wrangler secret put 으로 넣는다.
-#   wrangler secret put ICS_URL      이캠퍼스 달력 URL
-#   wrangler secret put APP_TOKEN    이 페이지를 열 때 쓸 임의의 긴 문자열
+#   wrangler secret put DATA_KEY     달력 주소를 암호화하는 임의의 긴 문자열
+#   wrangler secret put OWNER_ID     (선택) 만든 사람의 학번. 1인용 시절 데이터가 이 계정에 붙는다
+#   wrangler secret put VIEW_TOKEN   (선택) 읽기 전용 링크. OWNER_ID 의 화면을 보기만 한다
+# 로컬(wrangler dev)에서는 deploy/.dev.vars 에 같은 이름으로 적는다. 커밋하지 않는다.

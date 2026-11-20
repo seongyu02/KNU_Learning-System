@@ -1,0 +1,13 @@
+{
+  "search.useIgnoreFiles": false,
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/dist": true,
+    "**/.next": true
+  },
+  "workbench.editorAssociations": {
+    "*.md": "vscode.markdown.preview.editor",
+    "*.html": "workbench.editor.browser"
+  },
+  "java.compile.nullAnalysis.mode": "automatic"
+}
