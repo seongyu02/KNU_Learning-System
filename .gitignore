@@ -4,17 +4,24 @@ node_modules/
 .venv/
 __pycache__/
 *.pyc
-.claude/settings.local.json
+
+# 로컬 수업 자료, 과제 기록, 편집기 설정
+/.claude/
+/CLAUDE.md
+/.vscode/
+/docs/
+/netsvc-학습시스템/
+/과제소개.md
+/사용과개선.md
+/메인화면.png
+/내과제/*
+!/내과제/웹앱.html
+!/내과제/예시일정.ics
 
 # 개인 자격증명 — 절대 커밋하지 않는다
-# .env.local 은 이캠퍼스 달력 URL(일정 전체를 읽는 열쇠)과 웹앱 토큰을 담는다.
-내과제/.env.local
-내과제/계기판 열기.url
 deploy/.dev.vars
 
 # 생성물 — 언제든 다시 만든다
-내과제/대시보드.html
-내과제/sync.log
 deploy/public/
 .wrangler/
 deploy/.wrangler/
